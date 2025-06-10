@@ -62,7 +62,13 @@ public class DeviceRegistrationController extends BaseController {
             Customer requestCustomer = deviceRegistrationService.findCustomerByEmail(request.getEmail());
             Customer currentCustomer = deviceRegistrationService.findCustomerById(device.getCustomerId().getId().toString());
             String token = deviceRegistrationService.getDeviceAccessToken(deviceUUID.toString());
-            deviceId = deviceUUID.toString();
+            try {
+
+                deviceId = deviceUUID.toString();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
             if (requestCustomer != null) {
                 boolean isAssigned = device.getCustomerId() != null && currentCustomer != null;
                 boolean isSameCustomer = isAssigned && currentCustomer.getEmail().equals(request.getEmail());
@@ -77,6 +83,7 @@ public class DeviceRegistrationController extends BaseController {
                 }
             } else if (device.getCustomerId().getId().equals(NULL_UUID)) {
                 Customer newCustomer = deviceRegistrationService.createCustomer(request.getEmail());
+
                 deviceRegistrationService.assignDeviceToCustomer(deviceId, newCustomer.getId().toString(), request.getDeviceName(), request.getEmail(), true);
                 return buildResponse(200, "New customer created and device assigned.", token);
             } else {

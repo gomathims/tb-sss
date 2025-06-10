@@ -15,6 +15,8 @@
  */
 package org.thingsboard.server.service.custom;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -61,6 +63,7 @@ public class DeviceRegistrationService {
     private String cachedToken;
     private Instant tokenExpiryTime;
     private static final String MAC_ID = "Mac_id";
+    private static final String COMMON_DASHBOARD_NAME = "Tenant Dashboard";
 
     @Autowired
     public DeviceRegistrationService(RestTemplate restTemplate, AttributesDao attributesDao, CustomerDao customerDao, DeviceDao deviceDao) {
@@ -195,12 +198,17 @@ public class DeviceRegistrationService {
             customer.setId(new CustomerId(UUID.fromString((String) idMap.get("id"))));
             customer.setTitle((String) body.get("title"));
             customer.setEmail((String) body.get("email"));
+
+            String dashboardId = getDashboardIdByTitle(COMMON_DASHBOARD_NAME);
+            String assignStatus = assignDashboardToCustomer(customer.getId().toString(), dashboardId);
+
             return customer;
 
         } catch (Exception e) {
-            throw new DatabaseException("Failed to create customer: " + e.getMessage(), e);
+            throw  new DatabaseException("Failed to create customer: " + e.getMessage(), e);
         }
     }
+
 
     public String assignDeviceToCustomer(String deviceId, String customerId, String desiredDeviceName, String userEmail, boolean createUser) {
         try {
@@ -225,6 +233,7 @@ public class DeviceRegistrationService {
             updateExpiryDateForOtherDevices(customerId, deviceId, expiryDate);
 
             return "Device assigned successfully.";
+
         } catch (HttpClientErrorException.Conflict e) {
             log.warn("User with email '{}' already exists.", userEmail);
             return "Device assigned, but user already exists.";
@@ -234,7 +243,6 @@ public class DeviceRegistrationService {
             throw new RuntimeException("Unexpected error: " + e.getMessage(), e);
         }
     }
-
 
     public String createUserForCustomer(String deviceId, String customerId, String deviceName, String userEmail) {
         try {
@@ -350,7 +358,6 @@ public class DeviceRegistrationService {
 
         try {
             restTemplate.postForEntity(url, request, Void.class);
-            System.out.println("Attributes updated for device: " + deviceId);
         } catch (Exception e) {
             throw new RuntimeException("Failed to update attributes for device " + deviceId + ": " + e.getMessage());
         }
@@ -373,7 +380,6 @@ public class DeviceRegistrationService {
                     HttpEntity<Map<String, Object>> request = new HttpEntity<>(attributes, getHeaders());
 
                     restTemplate.postForEntity(deviceAttrUrl, request, Void.class);
-                    System.out.println("Updated expiryDate for other device: " + deviceId);
                 }
             }
         } catch (Exception e) {
@@ -391,9 +397,44 @@ public class DeviceRegistrationService {
                 Void.class
         );
         if (response.getStatusCode() == HttpStatus.OK) {
-            return "Device unassigned from customer successfully.";
+            return ("Device unassigned from customer successfully.");
         } else {
-            return "Failed to unassign device. Status: " + response.getStatusCode();
+            return ("Failed to unassign device. Status: " + response.getStatusCode());
+        }
+    }
+
+    public String getDashboardIdByTitle(String title) throws Exception {
+
+        HttpEntity<Void> entity = new HttpEntity<>(getHeaders());
+        String url = baseUrl + "/api/tenant/dashboards?pageSize=100&page=0";
+
+        ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
+        ObjectMapper mapper = new ObjectMapper();
+        if (response.getStatusCode() == HttpStatus.OK) {
+            JsonNode data = mapper.readTree(response.getBody()).path("data");
+
+            for (JsonNode dashboard : data) {
+                String currentTitle = dashboard.path("title").asText();
+                if (title.equals(currentTitle)) {
+                    return dashboard.path("id").path("id").asText(); // UUID string
+                }
+            }
+        }
+        throw new RuntimeException("Dashboard id was not found");
+    }
+
+    public String assignDashboardToCustomer(String customerId, String dashboardId) {
+        RestTemplate restTemplate = new RestTemplate();
+        HttpEntity<Void> entity = new HttpEntity<>(getHeaders());
+
+        String assignUrl = baseUrl + "/api/customer/" + customerId + "/dashboard/" + dashboardId;
+
+        ResponseEntity<String> response = restTemplate.exchange(assignUrl, HttpMethod.POST, entity, String.class);
+
+        if (response.getStatusCode() == HttpStatus.OK) {
+            return ("Dashboard assigned successfully.");
+        } else {
+            throw new RuntimeException("Failed to assign dashboard. Status: " + response.getStatusCode());
         }
     }
 
