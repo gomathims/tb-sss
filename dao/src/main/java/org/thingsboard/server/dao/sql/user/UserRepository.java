@@ -23,6 +23,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.thingsboard.server.common.data.edqs.fields.UserFields;
 import org.thingsboard.server.common.data.security.Authority;
+import org.thingsboard.server.dao.model.sql.CustomerEntity;
 import org.thingsboard.server.dao.model.sql.UserEntity;
 
 import java.util.Collection;
@@ -78,4 +79,8 @@ public interface UserRepository extends JpaRepository<UserEntity, UUID> {
             "u.customerId, u.version, u.firstName, u.lastName, u.email, u.phone, u.additionalInfo) " +
             "FROM UserEntity u WHERE u.id > :id ORDER BY u.id")
     List<UserFields> findNextBatch(@Param("id") UUID id, Limit limit);
+
+    @Query("SELECT u FROM UserEntity u WHERE u.id = :userId")
+    UserEntity findByUserIdValue(@Param("userId") UUID userId);
+
 }

@@ -1995,3 +1995,5 @@ thingsboard:
     base-url: http://localhost:8080
     username: tenant@thingsboard.org
     password: tenant
+COMMON_DASHBOARD_NAME: Dashboard C
+HOME_DASHBOARD_NAME: Dashboard C

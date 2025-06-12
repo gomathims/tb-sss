@@ -156,4 +156,7 @@ public class JpaUserDao extends JpaAbstractDao<UserEntity, User> implements User
         return EntityType.USER;
     }
 
+    @Override
+    public UserEntity findByUserIdValue(String userId) { return userRepository.findByUserIdValue(UUID.fromString(userId)); }
+
 }

@@ -1,12 +1,12 @@
 /**
  * Copyright © 2016-2025 The Thingsboard Authors
- *
+ * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -28,8 +28,11 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.RestTemplate;
 import org.thingsboard.server.common.data.Customer;
+import org.thingsboard.server.common.data.Dashboard;
 import org.thingsboard.server.common.data.Device;
+import org.thingsboard.server.common.data.User;
 import org.thingsboard.server.common.data.id.CustomerId;
+import org.thingsboard.server.common.data.id.TenantId;
 import org.thingsboard.server.dao.attributes.AttributesDao;
 import org.thingsboard.server.dao.customer.CustomerDao;
 import org.thingsboard.server.dao.device.DeviceDao;
@@ -39,6 +42,10 @@ import org.thingsboard.server.dao.exception.DeviceCredentialsValidationException
 import org.thingsboard.server.dao.exception.IncorrectParameterException;
 import org.thingsboard.server.dao.model.sql.CustomerEntity;
 import org.thingsboard.server.dao.model.sql.DeviceEntity;
+import org.thingsboard.server.dao.model.sql.UserEntity;
+import org.thingsboard.server.dao.sql.user.UserRepository;
+import org.thingsboard.server.dao.user.UserDao;
+import org.thingsboard.server.dao.user.UserService;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -50,10 +57,18 @@ import java.util.*;
 public class DeviceRegistrationService {
 
     private static final long TOKEN_EXPIRY_SECONDS = 3600;
+    private static final String MAC_ID = "Mac_id";
+
+    @Value("${COMMON_DASHBOARD_NAME}")
+    private String COMMON_DASHBOARD_NAME;
+    @Value("${HOME_DASHBOARD_NAME}")
+    private String HOME_DASHBOARD_NAME;
     private final RestTemplate restTemplate;
     private final AttributesDao attributesDao;
     private final CustomerDao customerDao;
     private final DeviceDao deviceDao;
+    private final UserDao userDao;
+    private final UserRepository userRepository;
     @Value("${thingsboard.api.base-url}")
     private String baseUrl;
     @Value("${thingsboard.api.username}")
@@ -62,15 +77,15 @@ public class DeviceRegistrationService {
     private String password;
     private String cachedToken;
     private Instant tokenExpiryTime;
-    private static final String MAC_ID = "Mac_id";
-    private static final String COMMON_DASHBOARD_NAME = "Tenant Dashboard";
 
     @Autowired
-    public DeviceRegistrationService(RestTemplate restTemplate, AttributesDao attributesDao, CustomerDao customerDao, DeviceDao deviceDao) {
+    public DeviceRegistrationService(RestTemplate restTemplate, AttributesDao attributesDao, CustomerDao customerDao, DeviceDao deviceDao, UserDao userDao, UserRepository userRepository) {
         this.restTemplate = restTemplate;
         this.attributesDao = attributesDao;
         this.customerDao = customerDao;
         this.deviceDao = deviceDao;
+        this.userDao = userDao;
+        this.userRepository = userRepository;
     }
 
     public static String getStartDate() {
@@ -205,7 +220,7 @@ public class DeviceRegistrationService {
             return customer;
 
         } catch (Exception e) {
-            throw  new DatabaseException("Failed to create customer: " + e.getMessage(), e);
+            throw new DatabaseException("Failed to create customer: " + e.getMessage(), e);
         }
     }
 
@@ -226,7 +241,12 @@ public class DeviceRegistrationService {
             String createdDate = getStartDate();
 
             if (createUser) {
-                createUserForCustomer(deviceId, customerId, desiredDeviceName, userEmail);
+                String input = createUserForCustomer(deviceId, customerId, desiredDeviceName, userEmail);
+                String id = null;
+                if (input != null && input.startsWith("userId::")) {
+                    id = input.substring("userId::".length());
+                    saveHomeDashboard(id);
+                }
             }
 
             addServerAttributesConditionally(deviceId, expiryDate, createdDate, true);
@@ -257,7 +277,10 @@ public class DeviceRegistrationService {
 
             if (userResponse.getStatusCode().is2xxSuccessful()) {
                 log.info("User '{}' created successfully.", userEmail);
-                return "Device assigned and user created successfully.";
+                Map<String, Object> body = userResponse.getBody();
+                Map<String, Object> idMap = (Map<String, Object>) body.get("id");
+                String userId = (String) idMap.get("id");
+                return "userId::" + userId;
             } else {
                 return "Device assigned, but user creation failed.";
             }
@@ -438,4 +461,37 @@ public class DeviceRegistrationService {
         }
     }
 
+    public String saveHomeDashboard(String userId) {
+        try {
+            UserEntity userEntity = userDao.findByUserIdValue(userId);
+            User user = new User(userEntity.toData());
+
+            // Convert existing additionalInfo (JsonNode) to JSONObject
+            JSONObject additionalInfo;
+            JsonNode existingInfo = user.getAdditionalInfo();
+
+            if (existingInfo != null && !existingInfo.isNull()) {
+                additionalInfo = new JSONObject(existingInfo.toString());
+            } else {
+                additionalInfo = new JSONObject();
+            }
+
+            // Put values into JSONObject
+            String homeDashboardId = getDashboardIdByTitle(HOME_DASHBOARD_NAME);
+
+            additionalInfo.put("homeDashboardId", homeDashboardId);
+            additionalInfo.put("homeDashboardHideToolbar", false);
+
+            // Convert back to JsonNode and set
+            JsonNode updatedInfo = new ObjectMapper().readTree(additionalInfo.toString());
+            user.setAdditionalInfo(updatedInfo);
+
+            UserEntity userEntity1 = new UserEntity(user);
+            userRepository.save(userEntity1);
+
+            return ("Home Dashboard assigned successfully.");
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to assign dashboard.");
+        }
+    }
 }

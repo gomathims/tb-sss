@@ -24,6 +24,7 @@ import org.thingsboard.server.common.data.page.PageLink;
 import org.thingsboard.server.common.data.security.Authority;
 import org.thingsboard.server.dao.Dao;
 import org.thingsboard.server.dao.TenantEntityDao;
+import org.thingsboard.server.dao.model.sql.UserEntity;
 
 import java.util.List;
 import java.util.UUID;
@@ -101,4 +102,5 @@ public interface UserDao extends Dao<User>, TenantEntityDao<User> {
 
     PageData<User> findByAuthorityAndTenantProfilesIds(Authority authority, List<TenantProfileId> tenantProfilesIds, PageLink pageLink);
 
+    UserEntity findByUserIdValue(String userId);
 }
