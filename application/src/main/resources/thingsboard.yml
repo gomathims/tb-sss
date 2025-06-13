@@ -1993,7 +1993,7 @@ mqtt:
 thingsboard:
   api:
     base-url: http://localhost:8080
-    username: tenant@thingsboard.org
-    password: tenant
-COMMON_DASHBOARD_NAME: Dashboard C
-HOME_DASHBOARD_NAME: Dashboard C
+    username: mohan.sivaraj@eviqtech.com
+    password: EVIQ123
+COMMON_DASHBOARD_NAME: SuperSmart - Customer View
+HOME_DASHBOARD_NAME: SuperSmart - Customer View

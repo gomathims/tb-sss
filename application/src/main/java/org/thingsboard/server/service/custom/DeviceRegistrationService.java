@@ -312,7 +312,7 @@ public class DeviceRegistrationService {
         }
 
         // 3) Rename and update the device
-        device.setName(finalName);
+        device.setLabel(finalName);
 
         String saveUrl = baseUrl + "/api/device";
         restTemplate.exchange(
@@ -339,7 +339,7 @@ public class DeviceRegistrationService {
         JSONArray dataArray = json.getJSONArray("data");
         for (int i = 0; i < dataArray.length(); i++) {
             JSONObject deviceObj = dataArray.getJSONObject(i);
-            String existingName = deviceObj.optString("name", "");
+            String existingName = deviceObj.optString("label", "");
             if (existingName.equalsIgnoreCase(deviceName)) {
                 return true;
             }
